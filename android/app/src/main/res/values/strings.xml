@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">reel_controller</string>
+
+    <string name="accessibility_service_description">
+        Allows Reel Controller to perform swipe gestures on the screen.
+    </string>
+
+</resources>
