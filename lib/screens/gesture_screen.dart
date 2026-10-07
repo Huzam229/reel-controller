@@ -20,6 +20,7 @@ class _GestureScreenState extends State<GestureScreen> {
   );
 
   Timer? _timer;
+  bool _polling = false;
 
   String _label = 'Waiting for gesture';
 
@@ -41,7 +42,15 @@ class _GestureScreenState extends State<GestureScreen> {
   // Get gesture from Flask
   // --------------------------------------------------
 
-  Future<void> _poll() async {
+ Future<void> _poll() async {
+
+  if (_polling) {
+    return;
+  }
+
+  _polling = true;
+
+  try {
 
     final gesture = await GestureService.getGesture();
 
@@ -54,11 +63,25 @@ class _GestureScreenState extends State<GestureScreen> {
     });
 
     if (gesture == 'NEXT_REEL') {
-      await _sendSwipe('swipeUp', 'Next reel swipe sent');
+
+      await _sendSwipe(
+        'swipeUp',
+        'Next reel swipe sent',
+      );
+
     } else if (gesture == 'PREVIOUS_REEL') {
-      await _sendSwipe('swipeDown', 'Previous reel swipe sent');
+
+      await _sendSwipe(
+        'swipeDown',
+        'Previous reel swipe sent',
+      );
     }
+
+  } finally {
+
+    _polling = false;
   }
+}
 
   // --------------------------------------------------
   // Android reel swipe
