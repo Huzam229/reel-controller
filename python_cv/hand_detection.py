@@ -49,14 +49,28 @@ timestamp = 0
 previous_y = None
 start_y = None
 
+# Minimum movement between two frames
+# required to consider movement significant
 movement_threshold = 10
 
+# Movement smaller than this is considered stopped
 stop_threshold = 3
+
+# Number of stopped frames required
+# to finish a gesture
 required_stopped_frames = 5
+
+# Minimum distance required for a real swipe
+minimum_gesture_distance = 80
 
 stopped_frames = 0
 
 gesture_active = False
+
+gesture_direction = None
+
+# Store the farthest point reached
+peak_y = None
 
 
 # --------------------------------------------------
@@ -110,9 +124,7 @@ while True:
 
     if result.hand_landmarks:
 
-        # Get first detected hand
         hand = result.hand_landmarks[0]
-
 
         # Landmark 8 = index fingertip
         index_tip = hand[8]
@@ -132,37 +144,6 @@ while True:
 
 
         # --------------------------------------------------
-        # Set starting Y position
-        # --------------------------------------------------
-
-        if start_y is None:
-
-            start_y = index_y
-
-            print(
-                "Start Y:",
-                start_y
-            )
-
-
-        # --------------------------------------------------
-        # Calculate total movement
-        # --------------------------------------------------
-
-        total_movement = index_y - start_y
-
-
-        print(
-            "Start Y:",
-            start_y,
-            "Current Y:",
-            index_y,
-            "Total movement:",
-            total_movement
-        )
-
-
-        # --------------------------------------------------
         # Frame-to-frame movement
         # --------------------------------------------------
 
@@ -172,46 +153,218 @@ while True:
 
 
             # --------------------------------------------------
-            # Check if finger is approximately stopped
+            # Detect if finger is approximately stopped
             # --------------------------------------------------
 
             if abs(movement) <= stop_threshold:
 
                 stopped_frames += 1
 
+                # ------------------------------------------
+                # Gesture finished
+                # ------------------------------------------
 
-                if stopped_frames >= required_stopped_frames:
+                if (
+                    stopped_frames >= required_stopped_frames
+                    and gesture_active
+                ):
+
+                    print()
+                    print("GESTURE FINISHED")
+
+                    # --------------------------------------
+                    # Calculate actual peak distance
+                    # --------------------------------------
+
+                    if gesture_direction == "UP":
+
+                        gesture_distance = start_y - peak_y
+
+                    else:
+
+                        gesture_distance = peak_y - start_y
+
 
                     print(
-                        "Finger is stopped"
+                        "Gesture direction:",
+                        gesture_direction
                     )
+
+                    print(
+                        "Gesture distance:",
+                        gesture_distance
+                    )
+
+
+                    # --------------------------------------
+                    # Check minimum gesture distance
+                    # --------------------------------------
+
+                    if gesture_distance >= minimum_gesture_distance:
+
+                        # ----------------------------------
+                        # UP
+                        # ----------------------------------
+
+                        if gesture_direction == "UP":
+
+                            print("UP GESTURE")
+                            print("NEXT REEL")
+
+
+                        # ----------------------------------
+                        # DOWN
+                        # ----------------------------------
+
+                        elif gesture_direction == "DOWN":
+
+                            print("DOWN GESTURE")
+                            print("PREVIOUS REEL")
+
+
+                    else:
+
+                        print("GESTURE TOO SMALL")
+                        print("NO ACTION")
+
+
+                    # --------------------------------------
+                    # Reset gesture
+                    # --------------------------------------
+
+                    gesture_active = False
+                    start_y = None
+                    peak_y = None
+                    gesture_direction = None
+                    stopped_frames = 0
 
 
             else:
 
+                # Finger started moving again
                 stopped_frames = 0
 
 
             # --------------------------------------------------
-            # Detect significant movement
+            # Detect gesture start
             # --------------------------------------------------
 
-            if movement < -movement_threshold:
+            if abs(movement) > movement_threshold:
 
-                print(
-                    "Significant UP movement"
-                )
+                # ------------------------------------------
+                # Start a new gesture
+                # ------------------------------------------
+
+                if not gesture_active:
+
+                    gesture_active = True
+
+                    # Gesture starts from previous position
+                    start_y = previous_y
+
+                    # First significant movement determines
+                    # the gesture direction
+                    if movement < 0:
+
+                        gesture_direction = "UP"
+
+                    else:
+
+                        gesture_direction = "DOWN"
 
 
-            elif movement > movement_threshold:
+                    # Initial peak
+                    peak_y = previous_y
 
-                print(
-                    "Significant DOWN movement"
-                )
+
+                    print()
+                    print("GESTURE STARTED")
+
+                    print(
+                        "Gesture Start Y:",
+                        start_y
+                    )
+
+                    print(
+                        "Gesture Direction:",
+                        gesture_direction
+                    )
+
+
+                # --------------------------------------------------
+                # Update peak position
+                # --------------------------------------------------
+
+                if gesture_direction == "UP":
+
+                    # Smaller Y means higher on screen
+                    if index_y < peak_y:
+
+                        peak_y = index_y
+
+
+                elif gesture_direction == "DOWN":
+
+                    # Larger Y means lower on screen
+                    if index_y > peak_y:
+
+                        peak_y = index_y
+
+
+                # --------------------------------------------------
+                # Check direction consistency
+                # --------------------------------------------------
+
+                if movement < 0:
+
+                    if gesture_direction == "UP":
+
+                        print("UP movement")
+
+                    else:
+
+                        print("Opposite movement detected")
+
+                else:
+
+                    if gesture_direction == "DOWN":
+
+                        print("DOWN movement")
+
+                    else:
+
+                        print("Opposite movement detected")
 
 
         # --------------------------------------------------
-        # Save current Y for next frame
+        # Display gesture information
+        # --------------------------------------------------
+
+        if gesture_active:
+
+            if gesture_direction == "UP":
+
+                current_distance = start_y - index_y
+
+            else:
+
+                current_distance = index_y - start_y
+
+
+            print(
+                "Start Y:",
+                start_y,
+                "Current Y:",
+                index_y,
+                "Peak Y:",
+                peak_y,
+                "Distance:",
+                current_distance
+            )
+
+
+        # --------------------------------------------------
+        # Save current Y
         # --------------------------------------------------
 
         previous_y = index_y
@@ -229,7 +382,7 @@ while True:
 
 
         # --------------------------------------------------
-        # Draw red dot on index fingertip
+        # Draw red dot
         # --------------------------------------------------
 
         cv2.circle(
@@ -268,3 +421,72 @@ camera.release()
 cv2.destroyAllWindows()
 
 landmarker.close()
+
+
+
+# | ID | Landmark |
+# |---:|---|
+# | 0 | Wrist |
+# | 1 | Thumb CMC |
+# | 2 | Thumb MCP |
+# | 3 | Thumb IP |
+# | 4 | Thumb tip |
+# | 5 | Index MCP |
+# | 6 | Index PIP |
+# | 7 | Index DIP |
+# | 8 | Index tip |
+# | 9 | Middle MCP |
+# | 10 | Middle PIP |
+# | 11 | Middle DIP |
+# | 12 | Middle tip |
+# | 13 | Ring MCP |
+# | 14 | Ring PIP |
+# | 15 | Ring DIP |
+# | 16 | Ring tip |
+# | 17 | Pinky MCP |
+# | 18 | Pinky PIP |
+# | 19 | Pinky DIP |
+# | 20 | Pinky tip |
+
+
+
+
+
+# Start Y = 298
+
+# Frame       Current Y       Total Movement
+# -------------------------------------------
+# 1              298                0
+# 2              296               -2
+# 3              274              -24
+# 4              258              -40
+# 5              250              -48
+# 6              248              -50
+# 7              243              -55
+# 8              240              -58
+
+
+# Finger starts
+#      ↓
+# 298
+# 274
+# 250
+# 220
+# 190
+#      ↓
+# 190
+# 190
+# 190
+#      ↓
+# STOP
+
+
+# Previous    Current    Movement    abs()
+# -----------------------------------------
+# 298         298           0          0  ← stopped
+# 298         296          -2          2  ← stopped
+# 296         297           1          1  ← stopped
+# 297         299           2          2  ← stopped
+
+# 299         280         -19         19  ← moving
+# 280         250         -30         30  ← moving
