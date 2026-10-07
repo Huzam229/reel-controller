@@ -18,35 +18,40 @@ class MainActivity : FlutterActivity() {
 
             when (call.method) {
 
-                "swipeUp" -> {
+                "swipeUp" -> performSwipe(result, GestureAccessibilityService::swipeUp)
 
-                    val service = GestureAccessibilityService.instance
+                "swipeDown" -> performSwipe(result, GestureAccessibilityService::swipeDown)
 
-                    if (service == null) {
-                        result.error(
-                            "SERVICE_DISABLED",
-                            "Turn on Reel Controller in Settings, then Accessibility",
-                            null
-                        )
-                    } else {
-                        service.swipeUp { completed ->
-                            if (completed) {
-                                result.success(true)
-                            } else {
-                                result.error(
-                                    "SWIPE_CANCELLED",
-                                    "Android cancelled the swipe",
-                                    null
-                                )
-                            }
-                        }
-                    }
-                }
+                else -> result.notImplemented()
+            }
+        }
+    }
 
-                else -> {
+    private fun performSwipe(
+        result: MethodChannel.Result,
+        swipe: GestureAccessibilityService.( (Boolean) -> Unit ) -> Unit
+    ) {
 
-                    result.notImplemented()
-                }
+        val service = GestureAccessibilityService.instance
+
+        if (service == null) {
+            result.error(
+                "SERVICE_DISABLED",
+                "Turn on Reel Controller in Settings, then Accessibility",
+                null
+            )
+            return
+        }
+
+        service.swipe { completed ->
+            if (completed) {
+                result.success(true)
+            } else {
+                result.error(
+                    "SWIPE_CANCELLED",
+                    "Android cancelled the swipe",
+                    null
+                )
             }
         }
     }

@@ -52,29 +52,30 @@ class _GestureScreenState extends State<GestureScreen> {
     setState(() {
       _label = _labelFor(gesture);
     });
+
+    if (gesture == 'NEXT_REEL') {
+      await _sendSwipe('swipeUp', 'Next reel swipe sent');
+    } else if (gesture == 'PREVIOUS_REEL') {
+      await _sendSwipe('swipeDown', 'Previous reel swipe sent');
+    }
   }
 
   // --------------------------------------------------
-  // Test Android swipe
+  // Android reel swipe
   // --------------------------------------------------
 
-  Future<void> _testSwipeUp() async {
+  Future<void> _sendSwipe(String method, String sentMessage) async {
 
     try {
 
-      await platform.invokeMethod('swipeUp');
-
-      if (!mounted) {
-        return;
-      }
-
+      await platform.invokeMethod(method);
 
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _swipeStatus = 'Swipe sent';
+        _swipeStatus = sentMessage;
       });
 
     } on PlatformException catch (e) {
@@ -159,15 +160,6 @@ class _GestureScreenState extends State<GestureScreen> {
                       _swipeStatus,
                       textAlign: TextAlign.center,
                     ),
-
-                  const SizedBox(height: 30),
-
-                  ElevatedButton(
-                    onPressed: _testSwipeUp,
-                    child: const Text(
-                      'TEST SWIPE UP',
-                    ),
-                  ),
 
                 ],
               ),

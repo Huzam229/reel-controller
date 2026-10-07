@@ -32,11 +32,25 @@ class GestureAccessibilityService : AccessibilityService() {
     }
 
     fun swipeUp(onDone: (Boolean) -> Unit) {
+        // Finger moves up: next reel.
+        swipe(0.75f, 0.30f, onDone)
+    }
+
+    fun swipeDown(onDone: (Boolean) -> Unit) {
+        // Finger moves down: previous reel.
+        swipe(0.30f, 0.75f, onDone)
+    }
+
+    private fun swipe(
+        startFraction: Float,
+        endFraction: Float,
+        onDone: (Boolean) -> Unit
+    ) {
 
         val metrics = resources.displayMetrics
         val x = metrics.widthPixels / 2f
-        val startY = metrics.heightPixels * 0.8f
-        val endY = metrics.heightPixels * 0.2f
+        val startY = metrics.heightPixels * startFraction
+        val endY = metrics.heightPixels * endFraction
 
         val path = Path()
 
@@ -46,7 +60,7 @@ class GestureAccessibilityService : AccessibilityService() {
         val stroke = GestureDescription.StrokeDescription(
             path,
             0,
-            400
+            250
         )
 
         val gesture = GestureDescription.Builder()
