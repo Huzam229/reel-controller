@@ -40,49 +40,23 @@ if not camera.isOpened():
     exit()
 
 
+# --------------------------------------------------
+# Variables
+# --------------------------------------------------
+
 timestamp = 0
 
+previous_y = None
+start_y = None
 
-# --------------------------------------------------
-# Hand connections
-# --------------------------------------------------
+movement_threshold = 10
 
-connections = [
-    # Thumb
-    (0, 1),
-    (1, 2),
-    (2, 3),
-    (3, 4),
+stop_threshold = 3
+required_stopped_frames = 5
 
-    # Index finger
-    (0, 5),
-    (5, 6),
-    (6, 7),
-    (7, 8),
+stopped_frames = 0
 
-    # Middle finger
-    (0, 9),
-    (9, 10),
-    (10, 11),
-    (11, 12),
-
-    # Ring finger
-    (0, 13),
-    (13, 14),
-    (14, 15),
-    (15, 16),
-
-    # Pinky
-    (0, 17),
-    (17, 18),
-    (18, 19),
-    (19, 20),
-
-    # Palm
-    (5, 9),
-    (9, 13),
-    (13, 17)
-]
+gesture_active = False
 
 
 # --------------------------------------------------
@@ -98,21 +72,30 @@ while True:
         break
 
 
+    # --------------------------------------------------
     # OpenCV BGR → RGB
+    # --------------------------------------------------
+
     rgb_frame = cv2.cvtColor(
         frame,
         cv2.COLOR_BGR2RGB
     )
 
 
+    # --------------------------------------------------
     # Convert to MediaPipe image
+    # --------------------------------------------------
+
     mp_image = mp.Image(
         image_format=mp.ImageFormat.SRGB,
         data=rgb_frame
     )
 
 
+    # --------------------------------------------------
     # Detect hand
+    # --------------------------------------------------
+
     result = landmarker.detect_for_video(
         mp_image,
         timestamp
@@ -122,83 +105,156 @@ while True:
 
 
     # --------------------------------------------------
-    # Draw landmarks
+    # Find index fingertip
     # --------------------------------------------------
 
     if result.hand_landmarks:
 
+        # Get first detected hand
         hand = result.hand_landmarks[0]
 
+
+        # Landmark 8 = index fingertip
         index_tip = hand[8]
 
-        print(
-          "Index fingertip:",
-          index_tip.x,
-          index_tip.y
+
+        # --------------------------------------------------
+        # Convert normalized coordinates to pixels
+        # --------------------------------------------------
+
+        index_x = int(
+            index_tip.x * frame.shape[1]
         )
 
-        
-
-        # Convert normalized coordinates
-        # to pixel coordinates
-        points = []
-
-        for landmark in hand:
-
-            x = int(
-                landmark.x * frame.shape[1]
-            )
-
-            y = int(
-                landmark.y * frame.shape[0]
-            )
-
-            points.append((x, y))
+        index_y = int(
+            index_tip.y * frame.shape[0]
+        )
 
 
-        # Draw connections
-        for start, end in connections:
+        # --------------------------------------------------
+        # Set starting Y position
+        # --------------------------------------------------
 
-            cv2.line(
-                frame,
-                points[start],
-                points[end],
-                (0, 255, 0),
-                2
+        if start_y is None:
+
+            start_y = index_y
+
+            print(
+                "Start Y:",
+                start_y
             )
 
 
-        # Draw landmark points
-        for i, (x, y) in enumerate(points):
+        # --------------------------------------------------
+        # Calculate total movement
+        # --------------------------------------------------
 
-            cv2.circle(
-                frame,
-                (x, y),
-                5,
-                (0, 0, 255),
-                -1
-            )
-
-            # Draw landmark number
-            cv2.putText(
-                frame,
-                str(i),
-                (x + 5, y - 5),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.4,
-                (255, 255, 255),
-                1
-            )
+        total_movement = index_y - start_y
 
 
+        print(
+            "Start Y:",
+            start_y,
+            "Current Y:",
+            index_y,
+            "Total movement:",
+            total_movement
+        )
+
+
+        # --------------------------------------------------
+        # Frame-to-frame movement
+        # --------------------------------------------------
+
+        if previous_y is not None:
+
+            movement = index_y - previous_y
+
+
+            # --------------------------------------------------
+            # Check if finger is approximately stopped
+            # --------------------------------------------------
+
+            if abs(movement) <= stop_threshold:
+
+                stopped_frames += 1
+
+
+                if stopped_frames >= required_stopped_frames:
+
+                    print(
+                        "Finger is stopped"
+                    )
+
+
+            else:
+
+                stopped_frames = 0
+
+
+            # --------------------------------------------------
+            # Detect significant movement
+            # --------------------------------------------------
+
+            if movement < -movement_threshold:
+
+                print(
+                    "Significant UP movement"
+                )
+
+
+            elif movement > movement_threshold:
+
+                print(
+                    "Significant DOWN movement"
+                )
+
+
+        # --------------------------------------------------
+        # Save current Y for next frame
+        # --------------------------------------------------
+
+        previous_y = index_y
+
+
+        # --------------------------------------------------
+        # Print fingertip position
+        # --------------------------------------------------
+
+        print(
+            "Index fingertip:",
+            index_x,
+            index_y
+        )
+
+
+        # --------------------------------------------------
+        # Draw red dot on index fingertip
+        # --------------------------------------------------
+
+        cv2.circle(
+            frame,
+            (index_x, index_y),
+            10,
+            (0, 0, 255),
+            -1
+        )
+
+
+    # --------------------------------------------------
     # Show camera
+    # --------------------------------------------------
+
     cv2.imshow(
-        "Hand Landmarks",
+        "Index Fingertip",
         frame
     )
 
 
+    # --------------------------------------------------
     # Press Q to quit
+    # --------------------------------------------------
+
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
 
@@ -208,32 +264,7 @@ while True:
 # --------------------------------------------------
 
 camera.release()
+
 cv2.destroyAllWindows()
 
 landmarker.close()
-
-
-
-# | ID | Landmark |
-# |---:|---|
-# | 0 | Wrist |
-# | 1 | Thumb CMC |
-# | 2 | Thumb MCP |
-# | 3 | Thumb IP |
-# | 4 | Thumb tip |
-# | 5 | Index MCP |
-# | 6 | Index PIP |
-# | 7 | Index DIP |
-# | 8 | Index tip |
-# | 9 | Middle MCP |
-# | 10 | Middle PIP |
-# | 11 | Middle DIP |
-# | 12 | Middle tip |
-# | 13 | Ring MCP |
-# | 14 | Ring PIP |
-# | 15 | Ring DIP |
-# | 16 | Ring tip |
-# | 17 | Pinky MCP |
-# | 18 | Pinky PIP |
-# | 19 | Pinky DIP |
-# | 20 | Pinky tip |
