@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'screens/gesture_screen.dart';
+import 'package:reel_controller/screens/camera_screen.dart';
 
 void main() {
   runApp(const ReelControllerApp());
@@ -12,7 +12,7 @@ class ReelControllerApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: const GestureScreen(),
+      home: const CameraScreen(),
     );
   }
 }

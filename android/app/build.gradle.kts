@@ -19,7 +19,7 @@ android {
         applicationId = "com.example.reel_controller"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = maxOf(flutter.minSdkVersion, 24)
         targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
@@ -27,6 +27,20 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        ndk {
+            abiFilters.clear()
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+        }
+    }
+
+    androidResources {
+        noCompress += "task"
+    }
+
+    packaging {
+        jniLibs {
+            excludes += listOf("**/x86/**", "**/x86_64/**")
+        }
     }
 
     buildTypes {
@@ -36,6 +50,14 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+}
+
+dependencies {
+    implementation("com.google.mediapipe:tasks-vision:1.1.0")
+    implementation("androidx.camera:camera-core:1.4.2")
+    implementation("androidx.camera:camera-camera2:1.4.2")
+    implementation("androidx.camera:camera-lifecycle:1.4.2")
+    implementation("androidx.lifecycle:lifecycle-service:2.8.7")
 }
 
 kotlin {

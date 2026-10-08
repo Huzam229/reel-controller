@@ -24,3 +24,11 @@ plugins {
 }
 
 include(":app")
+
+// Phones are 32-bit ARM, 64-bit ARM, or both. Build both so the APK installs
+// on either kind.
+gradle.beforeProject {
+    if (name == "app") {
+        extensions.extraProperties.set("target-platform", "android-arm,android-arm64")
+    }
+}

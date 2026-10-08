@@ -1,5 +1,7 @@
-import 'package:camera/camera.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
@@ -9,80 +11,74 @@ class CameraScreen extends StatefulWidget {
 }
 
 class _CameraScreenState extends State<CameraScreen> {
-  CameraController? controller;
+  static const platform = MethodChannel('reel_controller/accessibility');
 
-  bool isProcessing = false;
-  int frameCount = 0;
+  Timer? _timer;
+  String _status = 'Starting hand control';
 
   @override
   void initState() {
     super.initState();
-    initializeCamera();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _start());
+    _timer = Timer.periodic(
+      const Duration(milliseconds: 200),
+      (_) => _refreshStatus(),
+    );
   }
 
-  Future<void> initializeCamera() async {
-    final cameras = await availableCameras();
-
-    final camera = cameras.firstWhere(
-      (camera) => camera.lensDirection == CameraLensDirection.front,
-      orElse: () => cameras.first,
-    );
-
-    controller = CameraController(
-      camera,
-      ResolutionPreset.medium,
-      enableAudio: false,
-    );
-
-    await controller!.initialize();
-
-    if (mounted) {
-      setState(() {});
-    }
-
-    startImageStream();
-  }
-
-  void startImageStream() {
-    controller!.startImageStream((CameraImage image) {
-      if (isProcessing) {
+  Future<void> _start() async {
+    try {
+      await platform.invokeMethod('startTracking');
+    } on PlatformException catch (error) {
+      if (!mounted) {
         return;
       }
 
-      isProcessing = true;
+      setState(() {
+        _status = error.message ?? 'Could not start hand control';
+      });
+    }
+  }
 
-      frameCount++;
+  Future<void> _refreshStatus() async {
+    try {
+      final status = await platform.invokeMethod<String>('trackingStatus');
 
-      print(
-        'Frame: $frameCount | '
-        'Width: ${image.width} | '
-        'Height: ${image.height}',
-      );
+      if (!mounted || status == null) {
+        return;
+      }
 
-      // Computer vision will go here later.
-
-      isProcessing = false;
-    });
+      setState(() {
+        _status = status;
+      });
+    } on PlatformException {
+      // The activity is not ready yet.
+    }
   }
 
   @override
   void dispose() {
-    controller?.dispose();
+    _timer?.cancel();
+    platform.invokeMethod('stopTracking');
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (controller == null || !controller!.value.isInitialized) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
-    }
-
     return Scaffold(
-      body: CameraPreview(controller!),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            _status,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

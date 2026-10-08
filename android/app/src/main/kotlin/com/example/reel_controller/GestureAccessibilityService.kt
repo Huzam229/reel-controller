@@ -3,9 +3,13 @@ package com.example.reel_controller
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.graphics.Path
+import android.os.Handler
+import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 
 class GestureAccessibilityService : AccessibilityService() {
+
+    private val handler = Handler(Looper.getMainLooper())
 
     companion object {
         var instance: GestureAccessibilityService? = null
@@ -13,54 +17,47 @@ class GestureAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-
         instance = this
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Nothing here yet
     }
 
     override fun onInterrupt() {
-        // Required
     }
 
     override fun onDestroy() {
         instance = null
-
         super.onDestroy()
     }
 
     fun swipeUp(onDone: (Boolean) -> Unit) {
-        // Finger moves up: next reel.
-        swipe(0.75f, 0.30f, onDone)
+        swipe(0.82f, 0.16f, 0, onDone)
     }
 
     fun swipeDown(onDone: (Boolean) -> Unit) {
-        // Finger moves down: previous reel.
-        swipe(0.30f, 0.75f, onDone)
+        swipe(0.18f, 0.82f, 0, onDone)
     }
 
     private fun swipe(
         startFraction: Float,
         endFraction: Float,
+        attempt: Int,
         onDone: (Boolean) -> Unit
     ) {
-
         val metrics = resources.displayMetrics
         val x = metrics.widthPixels / 2f
         val startY = metrics.heightPixels * startFraction
         val endY = metrics.heightPixels * endFraction
 
         val path = Path()
-
         path.moveTo(x, startY)
         path.lineTo(x, endY)
 
         val stroke = GestureDescription.StrokeDescription(
             path,
             0,
-            250
+            180
         )
 
         val gesture = GestureDescription.Builder()
@@ -73,7 +70,6 @@ class GestureAccessibilityService : AccessibilityService() {
             if (finished) {
                 return
             }
-
             finished = true
             onDone(completed)
         }
@@ -86,7 +82,14 @@ class GestureAccessibilityService : AccessibilityService() {
                 }
 
                 override fun onCancelled(gestureDescription: GestureDescription?) {
-                    finish(false)
+                    if (attempt == 0 && !finished) {
+                        finished = true
+                        handler.post {
+                            swipe(startFraction, endFraction, 1, onDone)
+                        }
+                    } else {
+                        finish(false)
+                    }
                 }
             },
             null
