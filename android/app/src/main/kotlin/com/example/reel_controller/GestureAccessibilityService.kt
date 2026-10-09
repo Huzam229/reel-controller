@@ -32,11 +32,11 @@ class GestureAccessibilityService : AccessibilityService() {
     }
 
     fun swipeUp(onDone: (Boolean) -> Unit) {
-        swipe(0.82f, 0.16f, 0, onDone)
+        swipe(0.74f, 0.24f, 0, onDone)
     }
 
     fun swipeDown(onDone: (Boolean) -> Unit) {
-        swipe(0.18f, 0.82f, 0, onDone)
+        swipe(0.26f, 0.74f, 0, onDone)
     }
 
     private fun swipe(
@@ -57,7 +57,7 @@ class GestureAccessibilityService : AccessibilityService() {
         val stroke = GestureDescription.StrokeDescription(
             path,
             0,
-            180
+            200
         )
 
         val gesture = GestureDescription.Builder()

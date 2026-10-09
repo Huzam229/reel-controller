@@ -126,19 +126,22 @@ class HandTrackingService : LifecycleService() {
             .setResultListener { result, image ->
                 val now = SystemClock.uptimeMillis()
                 val hand = result.landmarks().firstOrNull()
-                if (hand == null || hand.size <= indexTip) {
+                if (hand == null || hand.size <= pinkyTip) {
                     detector.onHandMissing(now)
                     if (now >= statusHoldUntil) {
-                        status = "Show your index finger"
+                        status = "Show your hand"
                     }
                 } else {
-                    val tip = hand[indexTip].y()
-                    val knuckle = hand[indexTip - 1].y()
-                    val action = detector.update(tip * 0.7f + knuckle * 0.3f, now)
+                    val pose = fingerPose(hand)
+                    val action = detector.update(pose, now)
                     if (action != null) {
                         performReel(action)
                     } else if (now >= statusHoldUntil) {
-                        status = "Hand seen"
+                        status = when {
+                            pose.fist -> "Fist"
+                            pose.indexExtended -> "Index"
+                            else -> "Hand seen"
+                        }
                     }
                 }
                 image.close()
@@ -154,6 +157,25 @@ class HandTrackingService : LifecycleService() {
             .build()
 
         return HandLandmarker.createFromOptions(this, options)
+    }
+
+    private fun fingerPose(hand: List<com.google.mediapipe.tasks.components.containers.NormalizedLandmark>): FingerPose {
+        fun distance(first: Int, second: Int): Float {
+            val dx = hand[first].x() - hand[second].x()
+            val dy = hand[first].y() - hand[second].y()
+            return kotlin.math.hypot(dx.toDouble(), dy.toDouble()).toFloat()
+        }
+
+        val palm = distance(wrist, middleMcp).coerceAtLeast(0.05f)
+        val indexExtended = hand[indexMcp].y() - hand[indexTip].y() > palm * 0.28f
+        val fingersCurled = hand[middleTip].y() > hand[middlePip].y() &&
+            hand[ringTip].y() > hand[ringPip].y() &&
+            hand[pinkyTip].y() > hand[pinkyPip].y()
+        return FingerPose(
+            indexExtended = indexExtended,
+            thumbFold = distance(thumbTip, indexMcp) / palm,
+            fist = fingersCurled && !indexExtended,
+        )
     }
 
     @Suppress("DEPRECATION")
@@ -345,6 +367,17 @@ class HandTrackingService : LifecycleService() {
         const val tag = "HandTrackingService"
         const val notificationId = 42
         const val indexTip = 8
+        const val indexPip = 6
+        const val indexMcp = 5
+        const val thumbTip = 4
+        const val wrist = 0
+        const val middleMcp = 9
+        const val middlePip = 10
+        const val middleTip = 12
+        const val ringPip = 14
+        const val ringTip = 16
+        const val pinkyPip = 18
+        const val pinkyTip = 20
 
         @Volatile
         var status: String = "Starting"

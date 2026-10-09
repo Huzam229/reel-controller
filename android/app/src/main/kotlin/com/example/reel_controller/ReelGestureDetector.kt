@@ -1,18 +1,22 @@
 package com.example.reel_controller
 
 /**
- * A short, steady finger travel is one reel.
- * Up (smaller y) is the next reel. Down is the previous reel.
- * The return stroke is ignored until the hand is still again.
+ * Point the index finger for the next reel.
+ * Open the thumb out of a fist for the previous reel.
+ * Each pose fires once, then the finger has to return.
  */
 class ReelGestureDetector {
 
-    private val samples = ArrayDeque<Sample>()
-    private var smoothY: Float? = null
-    private var lockedUntil = 0L
-    private var stillSince: Long? = null
     private var armed = true
+    private var lockedUntil = 0L
     private var missingSince: Long? = null
+    private var indexWasDown = false
+    private var indexUpSince: Long? = null
+    private var fistSince: Long? = null
+    private var thumbReady = false
+    private var closedThumb = 1f
+    private var smoothThumb = 1f
+    private var waitingFor = Wait.NONE
 
     fun onHandMissing(nowMs: Long) {
         if (missingSince == null) {
@@ -21,109 +25,110 @@ class ReelGestureDetector {
         if (nowMs - (missingSince ?: nowMs) < missingGraceMs) {
             return
         }
-        samples.clear()
-        smoothY = null
-        stillSince = null
         if (armed) {
-            lockedUntil = 0L
+            indexWasDown = false
+            indexUpSince = null
+            fistSince = null
+            thumbReady = false
+            waitingFor = Wait.NONE
         }
     }
 
-    fun update(y: Float, nowMs: Long): String? {
+    fun update(pose: FingerPose, nowMs: Long): String? {
         missingSince = null
-        val last = smoothY
-        if (last != null && kotlin.math.abs(y - last) > jumpLimit) {
-            return null
-        }
-        val current = smooth(y)
-
-        samples.addLast(Sample(nowMs, current))
-        while (samples.size > 1 && nowMs - samples.first().timeMs > windowMs) {
-            samples.removeFirst()
-        }
+        smoothThumb = smoothThumb * 0.55f + pose.thumbFold * 0.45f
 
         if (!armed) {
             if (nowMs < lockedUntil) {
                 return null
             }
-            val speed = if (last == null) 0f else kotlin.math.abs(current - last)
-            if (speed <= stillSpeed) {
-                if (stillSince == null) {
-                    stillSince = nowMs
+            val released = when (waitingFor) {
+                Wait.INDEX_DOWN -> !pose.indexExtended
+                Wait.THUMB_CLOSED -> pose.fist && smoothThumb < closedThumb + 0.12f
+                Wait.NONE -> true
+            }
+            if (released) {
+                armed = true
+                waitingFor = Wait.NONE
+                indexUpSince = null
+                if (!pose.indexExtended) {
+                    indexWasDown = true
                 }
-                if (nowMs - (stillSince ?: nowMs) >= stillMs) {
-                    armed = true
-                    stillSince = null
-                    samples.clear()
-                    samples.addLast(Sample(nowMs, current))
-                }
-            } else {
-                stillSince = null
             }
             return null
         }
 
-        if (samples.size < 4) {
-            return null
-        }
-        val oldest = samples.first()
-        val elapsed = nowMs - oldest.timeMs
-        if (elapsed < 70L) {
-            return null
+        if (thumbOpened(pose, nowMs)) {
+            lock(nowMs, Wait.THUMB_CLOSED)
+            return "PREVIOUS REEL"
         }
 
-        val travel = current - oldest.y
-        if (kotlin.math.abs(travel) < minTravel) {
-            return null
+        if (indexPointed(pose, nowMs)) {
+            lock(nowMs, Wait.INDEX_DOWN)
+            return "NEXT REEL"
         }
-        if (!directionIsSteady(travel)) {
-            return null
-        }
+        return null
+    }
 
+    private fun thumbOpened(pose: FingerPose, nowMs: Long): Boolean {
+        if (!pose.fist) {
+            fistSince = null
+            return false
+        }
+        if (fistSince == null) {
+            fistSince = nowMs
+            closedThumb = smoothThumb
+        } else if (!thumbReady) {
+            closedThumb = closedThumb * 0.8f + smoothThumb * 0.2f
+        }
+        if (nowMs - (fistSince ?: nowMs) >= fistHoldMs) {
+            thumbReady = true
+        }
+        return thumbReady && smoothThumb > closedThumb + thumbOpenTravel
+    }
+
+    private fun indexPointed(pose: FingerPose, nowMs: Long): Boolean {
+        if (!pose.indexExtended) {
+            indexWasDown = true
+            indexUpSince = null
+            return false
+        }
+        if (!indexWasDown) {
+            return false
+        }
+        if (indexUpSince == null) {
+            indexUpSince = nowMs
+        }
+        return nowMs - (indexUpSince ?: nowMs) >= pointHoldMs
+    }
+
+    private fun lock(nowMs: Long, until: Wait) {
         armed = false
         lockedUntil = nowMs + lockMs
-        stillSince = null
-        samples.clear()
-        return if (travel < 0f) "NEXT REEL" else "PREVIOUS REEL"
+        waitingFor = until
+        indexWasDown = false
+        indexUpSince = null
+        thumbReady = false
+        fistSince = null
     }
 
-    private fun directionIsSteady(travel: Float): Boolean {
-        val sign = if (travel < 0f) -1 else 1
-        var steps = 0
-        var agree = 0
-        var previous = samples.first().y
-        for (index in 1 until samples.size) {
-            val delta = samples[index].y - previous
-            previous = samples[index].y
-            if (kotlin.math.abs(delta) <= noise) {
-                continue
-            }
-            steps++
-            val stepSign = if (delta < 0f) -1 else 1
-            if (stepSign == sign) {
-                agree++
-            }
-        }
-        return steps >= 3 && agree * 4 >= steps * 3
+    private enum class Wait {
+        NONE,
+        INDEX_DOWN,
+        THUMB_CLOSED,
     }
-
-    private fun smooth(y: Float): Float {
-        val last = smoothY
-        val value = if (last == null) y else last * 0.5f + y * 0.5f
-        smoothY = value
-        return value
-    }
-
-    private data class Sample(val timeMs: Long, val y: Float)
 
     private companion object {
-        const val windowMs = 150L
-        const val minTravel = 0.055f
-        const val noise = 0.0025f
-        const val jumpLimit = 0.2f
-        const val lockMs = 480L
-        const val stillMs = 80L
-        const val stillSpeed = 0.0045f
+        const val thumbOpenTravel = 0.28f
+        const val fistHoldMs = 80L
+        const val pointHoldMs = 90L
+        const val lockMs = 280L
         const val missingGraceMs = 250L
     }
 }
+
+class FingerPose(
+    val indexExtended: Boolean,
+    val thumbFold: Float,
+    val fist: Boolean,
+)
