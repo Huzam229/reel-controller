@@ -37,12 +37,21 @@ class MainActivity : FlutterActivity() {
 
                 "trackingStatus" -> result.success(HandTrackingService.status)
 
+                "cameraGranted" -> result.success(cameraGranted())
+
                 else -> result.notImplemented()
             }
         }
     }
 
     private var trackingResult: MethodChannel.Result? = null
+
+    private fun cameraGranted(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
+    }
 
     private fun startTracking(result: MethodChannel.Result) {
         val cameraGranted = ContextCompat.checkSelfPermission(
