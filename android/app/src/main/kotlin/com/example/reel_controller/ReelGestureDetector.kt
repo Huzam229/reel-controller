@@ -2,8 +2,8 @@ package com.example.reel_controller
 
 /**
  * Point the index finger for the next reel.
- * Open the thumb out of a fist for the previous reel.
- * Each pose fires once, then the finger has to return.
+ * Point the index and middle fingers together for the previous reel.
+ * A fist does not scroll. It only readies the next pose.
  */
 class ReelGestureDetector {
 
@@ -12,10 +12,8 @@ class ReelGestureDetector {
     private var missingSince: Long? = null
     private var indexWasDown = false
     private var indexUpSince: Long? = null
-    private var fistSince: Long? = null
-    private var thumbReady = false
-    private var closedThumb = 1f
-    private var smoothThumb = 1f
+    private var twoWereDown = false
+    private var twoUpSince: Long? = null
     private var waitingFor = Wait.NONE
 
     fun onHandMissing(nowMs: Long) {
@@ -28,38 +26,40 @@ class ReelGestureDetector {
         if (armed) {
             indexWasDown = false
             indexUpSince = null
-            fistSince = null
-            thumbReady = false
+            twoWereDown = false
+            twoUpSince = null
             waitingFor = Wait.NONE
         }
     }
 
     fun update(pose: FingerPose, nowMs: Long): String? {
         missingSince = null
-        smoothThumb = smoothThumb * 0.55f + pose.thumbFold * 0.45f
-
         if (!armed) {
             if (nowMs < lockedUntil) {
                 return null
             }
             val released = when (waitingFor) {
-                Wait.INDEX_DOWN -> !pose.indexExtended
-                Wait.THUMB_CLOSED -> pose.fist && smoothThumb < closedThumb + 0.12f
+                Wait.INDEX_DOWN -> !pose.indexOnly
+                Wait.TWO_DOWN -> !pose.twoFingers
                 Wait.NONE -> true
             }
             if (released) {
                 armed = true
                 waitingFor = Wait.NONE
                 indexUpSince = null
-                if (!pose.indexExtended) {
+                twoUpSince = null
+                if (!pose.indexOnly) {
                     indexWasDown = true
+                }
+                if (!pose.twoFingers) {
+                    twoWereDown = true
                 }
             }
             return null
         }
 
-        if (thumbOpened(pose, nowMs)) {
-            lock(nowMs, Wait.THUMB_CLOSED)
+        if (twoFingersUp(pose, nowMs)) {
+            lock(nowMs, Wait.TWO_DOWN)
             return "PREVIOUS REEL"
         }
 
@@ -70,25 +70,24 @@ class ReelGestureDetector {
         return null
     }
 
-    private fun thumbOpened(pose: FingerPose, nowMs: Long): Boolean {
-        if (!pose.fist) {
-            fistSince = null
+    private fun twoFingersUp(pose: FingerPose, nowMs: Long): Boolean {
+        if (!pose.twoFingers) {
+            twoWereDown = true
+            twoUpSince = null
             return false
         }
-        if (fistSince == null) {
-            fistSince = nowMs
-            closedThumb = smoothThumb
-        } else if (!thumbReady) {
-            closedThumb = closedThumb * 0.8f + smoothThumb * 0.2f
+        indexUpSince = null
+        if (!twoWereDown) {
+            return false
         }
-        if (nowMs - (fistSince ?: nowMs) >= fistHoldMs) {
-            thumbReady = true
+        if (twoUpSince == null) {
+            twoUpSince = nowMs
         }
-        return thumbReady && smoothThumb > closedThumb + thumbOpenTravel
+        return nowMs - (twoUpSince ?: nowMs) >= pointHoldMs
     }
 
     private fun indexPointed(pose: FingerPose, nowMs: Long): Boolean {
-        if (!pose.indexExtended) {
+        if (!pose.indexOnly) {
             indexWasDown = true
             indexUpSince = null
             return false
@@ -108,19 +107,17 @@ class ReelGestureDetector {
         waitingFor = until
         indexWasDown = false
         indexUpSince = null
-        thumbReady = false
-        fistSince = null
+        twoWereDown = false
+        twoUpSince = null
     }
 
     private enum class Wait {
         NONE,
         INDEX_DOWN,
-        THUMB_CLOSED,
+        TWO_DOWN,
     }
 
     private companion object {
-        const val thumbOpenTravel = 0.28f
-        const val fistHoldMs = 80L
         const val pointHoldMs = 90L
         const val lockMs = 280L
         const val missingGraceMs = 250L
@@ -128,7 +125,7 @@ class ReelGestureDetector {
 }
 
 class FingerPose(
-    val indexExtended: Boolean,
-    val thumbFold: Float,
+    val indexOnly: Boolean,
+    val twoFingers: Boolean,
     val fist: Boolean,
 )

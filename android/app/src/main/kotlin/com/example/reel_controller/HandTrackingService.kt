@@ -138,8 +138,9 @@ class HandTrackingService : LifecycleService() {
                         performReel(action)
                     } else if (now >= statusHoldUntil) {
                         status = when {
+                            pose.twoFingers -> "Two fingers"
                             pose.fist -> "Fist"
-                            pose.indexExtended -> "Index"
+                            pose.indexOnly -> "Index"
                             else -> "Hand seen"
                         }
                     }
@@ -167,14 +168,18 @@ class HandTrackingService : LifecycleService() {
         }
 
         val palm = distance(wrist, middleMcp).coerceAtLeast(0.05f)
-        val indexExtended = hand[indexMcp].y() - hand[indexTip].y() > palm * 0.28f
-        val fingersCurled = hand[middleTip].y() > hand[middlePip].y() &&
-            hand[ringTip].y() > hand[ringPip].y() &&
-            hand[pinkyTip].y() > hand[pinkyPip].y()
+        fun raised(tip: Int, mcp: Int): Boolean {
+            return hand[mcp].y() - hand[tip].y() > palm * 0.28f
+        }
+
+        val indexUp = raised(indexTip, indexMcp)
+        val middleUp = raised(middleTip, middleMcp)
+        val ringDown = !raised(ringTip, ringMcp)
+        val pinkyDown = !raised(pinkyTip, pinkyMcp)
         return FingerPose(
-            indexExtended = indexExtended,
-            thumbFold = distance(thumbTip, indexMcp) / palm,
-            fist = fingersCurled && !indexExtended,
+            indexOnly = indexUp && !middleUp && ringDown && pinkyDown,
+            twoFingers = indexUp && middleUp && ringDown && pinkyDown,
+            fist = !indexUp && !middleUp && ringDown && pinkyDown,
         )
     }
 
@@ -369,14 +374,12 @@ class HandTrackingService : LifecycleService() {
         const val indexTip = 8
         const val indexPip = 6
         const val indexMcp = 5
-        const val thumbTip = 4
         const val wrist = 0
         const val middleMcp = 9
-        const val middlePip = 10
         const val middleTip = 12
-        const val ringPip = 14
+        const val ringMcp = 13
         const val ringTip = 16
-        const val pinkyPip = 18
+        const val pinkyMcp = 17
         const val pinkyTip = 20
 
         @Volatile
